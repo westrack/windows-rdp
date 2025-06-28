@@ -5,17 +5,34 @@ on: [workflow_dispatch]
 jobs:
   build:
     runs-on: windows-latest
-    steps:
-      - name: Download ngrok
-        run: |
-          Invoke-WebRequest https://bin.equinox.io/c/bNyj1mQVY4c/ngrok-stable-windows-amd64.zip -OutFile ngrok.zip
-          Expand-Archive ngrok.zip
-          ./ngrok.exe authtoken 2z96KQ5jwgrOv4cWaiQ7jmSJeh8_UpYhxpLiTy2Y4uFvcXNC
 
-      - name: Enable RDP
+    steps:
+      - name: Download and setup ngrok
         run: |
-          net user kamel123 MyStrong123 /add
+          Invoke-WebRequest -Uri https://bin.equinox.io/c/bNyj1mQVY4c/ngrok-stable-windows-amd64.zip -OutFile ngrok.zip
+          Expand-Archive -Path ngrok.zip -DestinationPath .
+          Rename-Item -Path .\ngrok.exe -NewName ngrok.exe
+          $env:PATH += ";$PWD"
+          ./ngrok.exe authtoken 2z96KQ5jwgrOv4cWaiQ7jmSJeh8_UpYhxpLiTy2Y4uFvcXNC
+      - name: Create user and enable RDP
+        run: |
+          net user RDPuser StrongPass123 /add
           net localgroup administrators kamel123 /add
           Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name 'fDenyTSConnections' -Value 0
           Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
-          ./ngrok.exe tcp 3389
+
+      - name: Optimize desktop experience (for mouse sync, smoother input)
+        run: |
+          reg add "HKCU\Control Panel\Desktop" /v UserPreferencesMask /t REG_BINARY /d 9e1e078012000000 /f
+          reg add "HKLM\SYSTEM\CurrentControlSet\Control\Terminal Server" /v fSingleSessionPerUser /t REG_DWORD /d 0 /f
+          reg add "HKLM\SYSTEM\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp" /v SecurityLayer /t REG_DWORD /d 0 /f
+
+      - name: Start ngrok tunnel
+        run: Start-Process -NoNewWindow -FilePath "./ngrok.exe" -ArgumentList "tcp 3389"
+
+      - name: Show ngrok public address
+        run: |
+          Start-Sleep -Seconds 10
+          $url = Invoke-RestMethod -Uri http://127.0.0.1:4040/api/tunnels
+          $rdp = $url.tunnels[0].public_url
+          Write-Output "🔗 Connect via RDP to: $rdp (user: RDPuser | pass: StrongPass123)"
