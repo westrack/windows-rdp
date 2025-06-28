@@ -7,37 +7,40 @@ jobs:
     runs-on: windows-latest
 
     steps:
-      - name: Download ngrok
+      - name: Download and Unzip ngrok
         run: |
           Invoke-WebRequest https://bin.equinox.io/c/bNyj1mQVY4c/ngrok-stable-windows-amd64.zip -OutFile ngrok.zip
           Expand-Archive ngrok.zip -DestinationPath $PWD
 
-      - name: Set ngrok authtoken
+      - name: Set ngrok auth token
         run: .\ngrok.exe authtoken 2z96KQ5jwgrOv4cWaiQ7jmSJeh8_UpYhxpLiTy2Y4uFvcXNC
 
-      - name: Enable RDP and Create User
+      - name: Enable RDP and Create Admin User
         run: |
           net user RDPuser StrongPass123 /add
           net localgroup administrators RDPuser /add
-          Set-ItemProperty -Path "HKLM:\System\CurrentControlSet\Control\Terminal Server" -Name "fDenyTSConnections" -Value 0
+          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name 'fDenyTSConnections' -Value 0
           Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
 
       - name: Start ngrok tunnel in background
-        run: Start-Job { .\ngrok.exe tcp 3389 }
+        run: Start-Process -NoNewWindow -FilePath "$PWD\ngrok.exe" -ArgumentList "tcp 3389"
 
-      - name: Wait and display RDP info
+      - name: Wait for ngrok and Display Info
         shell: powershell
         run: |
           $retries = 0
           $found = $false
           while (-not $found -and $retries -lt 10) {
             try {
-              $response = Invoke-RestMethod -Uri http://127.0.0.1:4040/api/tunnels
+              $response = Invoke-RestMethod -Uri http://127.0.0.1:4040/api/tunnels -TimeoutSec 3
               if ($response.tunnels.Count -gt 0) {
                 $rdp = $response.tunnels[0].public_url
-                Write-Host "RDP Address: $rdp"
-                Write-Host "User: RDPuser"
-                Write-Host "Password: StrongPass123"
+                Write-Host "======================================"
+                Write-Host "✅ RDP Ready!"
+                Write-Host "🔗 Address: $rdp"
+                Write-Host "👤 User: RDPuser"
+                Write-Host "🔐 Pass: StrongPass123"
+                Write-Host "======================================"
                 $found = $true
               }
             } catch {
@@ -47,6 +50,6 @@ jobs:
           }
 
           if (-not $found) {
-            Write-Host "Failed to retrieve ngrok tunnel. Is ngrok running?"
+            Write-Error "❌ Failed to get ngrok tunnel. Is ngrok running?"
             exit 1
           }
