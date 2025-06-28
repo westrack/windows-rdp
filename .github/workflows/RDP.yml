@@ -1,60 +1,58 @@
-name: RDP
+name: Free RDP - Windows via Ngrok
 
 on: [workflow_dispatch]
 
 jobs:
-  build:
+  rdp:
     runs-on: windows-latest
 
     steps:
-      - name: 📥 Download ngrok
-        run: |
-          Invoke-WebRequest https://bin.equinox.io/c/bNyj1mQVY4c/ngrok-stable-windows-amd64.zip -OutFile ngrok.zip
-          Expand-Archive ngrok.zip -DestinationPath .
-        shell: powershell
+    - name: 🔽 Download & Extract Ngrok
+      run: |
+        Invoke-WebRequest https://bin.equinox.io/c/bNyj1mQVY4c/ngrok-stable-windows-amd64.zip -OutFile ngrok.zip
+        Expand-Archive ngrok.zip -DestinationPath $PWD
 
-      - name: 🔑 Configure ngrok authtoken
-        run: .\ngrok.exe authtoken 2z96KQ5jwgrOv4cWaiQ7jmSJeh8_UpYhxpLiTy2Y4uFvcXNC
-        shell: powershell
+    - name: 🔐 Authenticate Ngrok
+      run: .\ngrok.exe authtoken 2z96KQ5jwgrOv4cWaiQ7jmSJeh8_UpYhxpLiTy2Y4uFvcXNC
+      # 🟡 استبدل YOUR_NGROK_AUTHTOKEN_HERE بالتوكن الخاص بك من https://dashboard.ngrok.com/get-started/your-authtoken
 
-      - name: 👤 Create RDP user & enable Remote Desktop
-        run: |
-          net user RDPuser StrongPass123 /add
-          net localgroup administrators RDPuser /add
-          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name 'fDenyTSConnections' -Value 0
-          Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
-        shell: powershell
+    - name: 👤 Create RDP user & enable RDP
+      run: |
+        net user RDPuser StrongPass123 /add
+        net localgroup administrators RDPuser /add
+        Set-ItemProperty -Path "HKLM:\System\CurrentControlSet\Control\Terminal Server" -Name "fDenyTSConnections" -Value 0
+        Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
 
-      - name: 🚀 Start ngrok tunnel in background
-        run: |
-          Start-Job -ScriptBlock {
-            Start-Process "$PWD\ngrok.exe" -ArgumentList "tcp 3389" -NoNewWindow -WindowStyle Hidden
-          }
-          Start-Sleep -Seconds 10
-        shell: powershell
+    - name: 🚀 Start ngrok tunnel in background
+      run: |
+        Start-Job { .\ngrok.exe tcp 3389 }
+        Start-Sleep -Seconds 10
 
-      - name: 🌐 Get ngrok public URL
-        run: |
-          $retries = 0
-          $found = $false
-          while (-not $found -and $retries -lt 10) {
-            try {
-              $response = Invoke-RestMethod -Uri http://127.0.0.1:4040/api/tunnels
-              if ($response.tunnels.Count -gt 0) {
-                $rdp = $response.tunnels[0].public_url
-                Write-Host "✅ RDP Address: $rdp"
-                Write-Host "👤 User: RDPuser"
-                Write-Host "🔐 Password: StrongPass123"
-                $found = $true
-              }
-            } catch {
+    - name: ⏳ Wait for tunnel and display credentials
+      shell: powershell
+      run: |
+        $retries = 0
+        $found = $false
+        while (-not $found -and $retries -lt 10) {
+          try {
+            $response = Invoke-RestMethod -Uri http://127.0.0.1:4040/api/tunnels
+            if ($response.tunnels.Count -gt 0) {
+              $rdp = $response.tunnels[0].public_url
+              Write-Host "✅ RDP Address: $rdp"
+              Write-Host "👤 User: RDPuser"
+              Write-Host "🔐 Password: StrongPass123"
+              $found = $true
+            } else {
               Start-Sleep -Seconds 3
               $retries++
             }
+          } catch {
+            Start-Sleep -Seconds 3
+            $retries++
           }
+        }
 
-          if (-not $found) {
-            Write-Host "❌ Failed to get ngrok tunnel info. Is ngrok running?"
-            exit 1
-          }
-        shell: powershell
+        if (-not $found) {
+          Write-Host "❌ Failed to get ngrok tunnel info. Is ngrok running?"
+          exit 1
+        }
