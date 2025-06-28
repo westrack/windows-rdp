@@ -5,32 +5,19 @@ on: [workflow_dispatch]
 jobs:
   build:
     runs-on: windows-latest
-
     steps:
       - name: Download ngrok
         run: |
           Invoke-WebRequest https://bin.equinox.io/c/bNyj1mQVY4c/ngrok-stable-windows-amd64.zip -OutFile ngrok.zip
           Expand-Archive ngrok.zip
+          ./ngrok.exe authtoken 2z96KQ5jwgrOv4cWaiQ7jmSJeh8_UpYhxpLiTy2Y4uFvcXNC
 
-      - name: Authenticate ngrok
-        run: |
-          .\ngrok.exe authtoken 2z96KQ5jwgrOv4cWaiQ7jmSJeh8_UpYhxpLiTy2Y4uFvcXNC
-
-      - name: Create RDP user and enable RDP
+      - name: Enable RDP
         run: |
           net user kamel123 MyStrong123 /add
           net localgroup administrators kamel123 /add
           Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name 'fDenyTSConnections' -Value 0
           Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
+          ./ngrok.exe tcp 3389
 
-      - name: Start ngrok tunnel
-        run: |
-          Start-Process -NoNewWindow -FilePath .\ngrok.exe -ArgumentList "tcp 3389"
-          Start-Sleep -Seconds 10
-          Invoke-WebRequest -UseBasicParsing http://127.0.0.1:4040/api/tunnels -OutFile ngrok_url.txt
-
-      - name: Upload ngrok tunnel info
-        uses: actions/upload-artifact@v4
-        with:
-          name: ngrok-tunnel-info
-          path: ngrok_url.txt
+      
