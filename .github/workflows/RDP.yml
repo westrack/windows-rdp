@@ -11,10 +11,11 @@ jobs:
           Invoke-WebRequest https://bin.equinox.io/c/bNyj1mQVY4c/ngrok-stable-windows-amd64.zip -OutFile ngrok.zip
           Expand-Archive ngrok.zip
           ./ngrok.exe authtoken 2z96KQ5jwgrOv4cWaiQ7jmSJeh8_UpYhxpLiTy2Y4uFvcXNC
+
       - name: Enable RDP
         run: |
           net user kamel123 MyStrong123 /add
           net localgroup administrators kamel123 /add
           Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name 'fDenyTSConnections' -Value 0
           Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
-          ./ngrok.exe tcp 3389          
+          ./ngrok.exe tcp 3389
