@@ -1,4 +1,4 @@
-name: RDP Free Session
+name: RDP
 
 on: [workflow_dispatch]
 
@@ -7,49 +7,18 @@ jobs:
     runs-on: windows-latest
 
     steps:
-      - name: Download and Unzip ngrok
+      - name: Download and extract ngrok
         run: |
           Invoke-WebRequest https://bin.equinox.io/c/bNyj1mQVY4c/ngrok-stable-windows-amd64.zip -OutFile ngrok.zip
-          Expand-Archive ngrok.zip -DestinationPath $PWD
+          Expand-Archive ngrok.zip -DestinationPath ngrok
 
-      - name: Set ngrok auth token
-        run: .\ngrok.exe authtoken 2z96KQ5jwgrOv4cWaiQ7jmSJeh8_UpYhxpLiTy2Y4uFvcXNC
-
-      - name: Enable RDP and Create Admin User
+      - name: Authenticate ngrok
         run: |
-          net user RDPuser StrongPass123 /add
-          net localgroup administrators RDPuser /add
+          ngrok\ngrok.exe authtoken 2z96KQ5jwgrOv4cWaiQ7jmSJeh8_UpYhxpLiTy2Y4uFvcXNC
+      - name: Enable RDP
+        run: |
+          net user kamel123 MyStrong123 /add
+          net localgroup administrators kamel123 /add
           Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name 'fDenyTSConnections' -Value 0
           Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
-
-      - name: Start ngrok tunnel in background
-        run: Start-Process -NoNewWindow -FilePath "$PWD\ngrok.exe" -ArgumentList "tcp 3389"
-
-      - name: Wait for ngrok and Display Info
-        shell: powershell
-        run: |
-          $retries = 0
-          $found = $false
-          while (-not $found -and $retries -lt 10) {
-            try {
-              $response = Invoke-RestMethod -Uri http://127.0.0.1:4040/api/tunnels -TimeoutSec 3
-              if ($response.tunnels.Count -gt 0) {
-                $rdp = $response.tunnels[0].public_url
-                Write-Host "======================================"
-                Write-Host "✅ RDP Ready!"
-                Write-Host "🔗 Address: $rdp"
-                Write-Host "👤 User: RDPuser"
-                Write-Host "🔐 Pass: StrongPass123"
-                Write-Host "======================================"
-                $found = $true
-              }
-            } catch {
-              Start-Sleep -Seconds 5
-              $retries++
-            }
-          }
-
-          if (-not $found) {
-            Write-Error "❌ Failed to get ngrok tunnel. Is ngrok running?"
-            exit 1
-          }
+          ngrok\ngrok.exe tcp 3389
