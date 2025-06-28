@@ -7,32 +7,39 @@ jobs:
     runs-on: windows-latest
 
     steps:
-      - name: Download and setup ngrok
+      - name: 🔽 Download ngrok
         run: |
-          Invoke-WebRequest -Uri https://bin.equinox.io/c/bNyj1mQVY4c/ngrok-stable-windows-amd64.zip -OutFile ngrok.zip
-          Expand-Archive -Path ngrok.zip -DestinationPath .
-          Rename-Item -Path .\ngrok.exe -NewName ngrok.exe
-          $env:PATH += ";$PWD"
-          ./ngrok.exe authtoken 2z96KQ5jwgrOv4cWaiQ7jmSJeh8_UpYhxpLiTy2Y4uFvcXNC
-      - name: Create user and enable RDP
+          Invoke-WebRequest https://bin.equinox.io/c/bNyj1mQVY4c/ngrok-stable-windows-amd64.zip -OutFile ngrok.zip
+          Expand-Archive ngrok.zip -DestinationPath .
+        shell: powershell
+
+      - name: 🛡️ Configure ngrok auth token
+        run: .\ngrok.exe authtoken 2z96KQ5jwgrOv4cWaiQ7jmSJeh8_UpYhxpLiTy2Y4uFvcXN
+        shell: powershell
+
+      - name: 👤 Create RDP user & enable Remote Desktop
         run: |
           net user RDPuser StrongPass123 /add
           net localgroup administrators RDPuser /add
           Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name 'fDenyTSConnections' -Value 0
           Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
+        shell: powershell
 
-      - name: Optimize desktop experience (for mouse sync, smoother input)
+      - name: 🚀 Start ngrok tunnel
+        run: Start-Process -FilePath "$PWD\ngrok.exe" -ArgumentList "tcp 3389" -WindowStyle Hidden
+        shell: powershell
+
+      - name: ⏳ Wait for tunnel and display RDP address
         run: |
-          reg add "HKCU\Control Panel\Desktop" /v UserPreferencesMask /t REG_BINARY /d 9e1e078012000000 /f
-          reg add "HKLM\SYSTEM\CurrentControlSet\Control\Terminal Server" /v fSingleSessionPerUser /t REG_DWORD /d 0 /f
-          reg add "HKLM\SYSTEM\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp" /v SecurityLayer /t REG_DWORD /d 0 /f
-
-      - name: Start ngrok tunnel
-        run: Start-Process -NoNewWindow -FilePath "./ngrok.exe" -ArgumentList "tcp 3389"
-
-      - name: Show ngrok public address
-        run: |
-          Start-Sleep -Seconds 10
-          $url = Invoke-RestMethod -Uri http://127.0.0.1:4040/api/tunnels
-          $rdp = $url.tunnels[0].public_url
-          Write-Output "🔗 Connect via RDP to: $rdp (user: RDPuser | pass: StrongPass123)"
+          Start-Sleep -Seconds 15
+          try {
+            $response = Invoke-RestMethod -Uri http://127.0.0.1:4040/api/tunnels
+            $rdp = $response.tunnels[0].public_url
+            Write-Host "🔗 RDP Address: $rdp"
+            Write-Host "🧑‍💻 User: RDPuser"
+            Write-Host "🔐 Password: StrongPass123"
+          } catch {
+            Write-Host "❌ Could not retrieve tunnel info. Is ngrok running?"
+            exit 1
+          }
+        shell: powershell
